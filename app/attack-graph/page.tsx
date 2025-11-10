@@ -1,11 +1,10 @@
 "use client"
 
 import { useState, useRef, useCallback, useEffect } from "react"
-import * as d3 from "d3"
 import { Footer } from "@/components/footer"
 import { VantaBackground } from "@/components/vanta-background"
 import { AttackGraphHeader } from "@/components/attack-graph-header"
-import { ForceDirectedGraph } from "@/components/force-directed-graph"
+import { ForceDirectedGraph, type ForceDirectedGraphHandle } from "@/components/force-directed-graph"
 import { TechniqueDetailsSidebar } from "@/components/technique-details-sidebar"
 import { AttackTimeline } from "@/components/attack-timeline"
 import { Card } from "@/components/card"
@@ -14,7 +13,7 @@ import type { Node, TechniqueDetails } from "@/utils/attack-graph-data"
 
 export default function AttackGraphPage() {
   const graphContainerRef = useRef<HTMLDivElement>(null)
-  const svgRef = useRef<SVGSVGElement>(null)
+  const graphRef = useRef<ForceDirectedGraphHandle>(null)
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
   const [techniqueDetails, setTechniqueDetails] = useState<TechniqueDetails | null>(null)
   const [isSidebarVisible, setIsSidebarVisible] = useState(true)
@@ -32,11 +31,8 @@ export default function AttackGraphPage() {
   }, [])
 
   const handleResetView = useCallback(() => {
-    if (svgRef.current) {
-      d3.select(svgRef.current)
-        .transition()
-        .duration(750)
-        .call(d3.zoom<SVGSVGElement, unknown>().transform as any, d3.zoomIdentity.translate(0, 0))
+    if (graphRef.current) {
+      graphRef.current.resetView()
     }
   }, [])
 
@@ -78,6 +74,7 @@ export default function AttackGraphPage() {
           <div className="flex flex-col lg:flex-row gap-6">
             <div ref={graphContainerRef} className="flex-1 rounded-lg border border-slate-700 bg-slate-900/50">
               <ForceDirectedGraph
+                ref={graphRef}
                 nodes={graphData.nodes}
                 links={graphData.links}
                 onNodeClick={handleNodeClick}
