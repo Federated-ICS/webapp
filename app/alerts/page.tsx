@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { Footer } from "@/components/footer"
 import { VantaBackground } from "@/components/vanta-background"
 import { AlertsHeader } from "@/components/alerts-header"
@@ -8,58 +8,70 @@ import { AlertFilters } from "@/components/alert-filters"
 import { AlertStats } from "@/components/alert-stats"
 import { AlertTable } from "@/components/alert-table"
 import { Pagination } from "@/components/pagination"
-import { mockAlerts } from "@/utils/mock-data"
+import { LoadingSpinner } from "@/components/loading-spinner"
+import { ErrorMessage } from "@/components/error-message"
+import { EmptyState } from "@/components/empty-state"
+import { apiClient, type Alert } from "@/lib/api-client"
 
 const ITEMS_PER_PAGE = 10
 
+interface AlertStats {
+  total: number
+  critical: number
+  unresolved: number
+  false_positives: number
+}
+
 export default function AlertsPage() {
+  // State
+  const [alerts, setAlerts] = useState<Alert[]>([])
+  const [stats, setStats] = useState<AlertStats>({ total: 0, critical: 0, unresolved: 0, false_positives: 0 })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [totalPages, setTotalPages] = useState(0)
+  const [totalItems, setTotalItems] = useState(0)
+
+  // Filters
   const [selectedSeverity, setSelectedSeverity] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedTimeRange, setSelectedTimeRange] = useState("Last 30 days")
   const [selectedFacility, setSelectedFacility] = useState("All Facilities")
   const [currentPage, setCurrentPage] = useState(1)
 
-  const filteredAlerts = useMemo(() => {
-    return mockAlerts.filter((alert) => {
-      // Severity filter
-      if (selectedSeverity !== "all" && alert.severity !== selectedSeverity) {
-        return false
-      }
+  // Fetch alerts from API
+  const fetchAlerts = useCallback(async () => {
+    setLoading(true)
+    setError(null)
 
-      // Search filter
-      const searchLower = searchQuery.toLowerCase()
-      if (
-        searchLower &&
-        !alert.title.toLowerCase().includes(searchLower) &&
-        !alert.description.toLowerCase().includes(searchLower)
-      ) {
-        return false
-      }
+    try {
+      // Fetch alerts with filters
+      const alertsResponse = await apiClient.getAlerts({
+        severity: selectedSeverity !== "all" ? selectedSeverity : undefined,
+        facility: selectedFacility !== "All Facilities" ? selectedFacility : undefined,
+        search: searchQuery || undefined,
+        time_range: selectedTimeRange,
+        page: currentPage,
+        limit: ITEMS_PER_PAGE,
+      })
 
-      // Facility filter
-      if (selectedFacility !== "All Facilities" && alert.facility !== selectedFacility) {
-        return false
-      }
+      // Fetch stats
+      const statsResponse = await apiClient.getAlertStats()
 
-      return true
-    })
-  }, [selectedSeverity, searchQuery, selectedFacility])
+      setAlerts(alertsResponse.alerts)
+      setTotalPages(alertsResponse.pages)
+      setTotalItems(alertsResponse.total)
+      setStats(statsResponse)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch alerts")
+    } finally {
+      setLoading(false)
+    }
+  }, [selectedSeverity, selectedFacility, searchQuery, selectedTimeRange, currentPage])
 
-  // Calculate paginated alerts
-  const paginatedAlerts = useMemo(() => {
-    const startIdx = (currentPage - 1) * ITEMS_PER_PAGE
-    return filteredAlerts.slice(startIdx, startIdx + ITEMS_PER_PAGE)
-  }, [filteredAlerts, currentPage])
-
-  // Calculate statistics
-  const stats = useMemo(() => {
-    const totalAlerts = filteredAlerts.length
-    const critical = filteredAlerts.filter((a) => a.severity === "critical").length
-    const unresolved = filteredAlerts.filter((a) => a.status === "new" || a.status === "acknowledged").length
-    const falsePositives = filteredAlerts.filter((a) => a.status === "false-positive").length
-
-    return { totalAlerts, critical, unresolved, falsePositives }
-  }, [filteredAlerts])
+  // Fetch data on mount and when filters change
+  useEffect(() => {
+    fetchAlerts()
+  }, [fetchAlerts])
 
   // Event handlers
   const handleFilterChange = useCallback((type: string, value: string) => {
@@ -83,12 +95,51 @@ export default function AlertsPage() {
     // TODO: Implement new alert creation
   }, [])
 
-  const handleAlertAction = useCallback((alertId: string) => {
-    console.log("Action requested for alert:", alertId)
-    // TODO: Implement alert actions
-  }, [])
+  const handleAlertAction = useCallback(async (alertId: string, action: string) => {
+    try {
+      await apiClient.updateAlertStatus(alertId, action)
+      // Refresh alerts after update
+      fetchAlerts()
+    } catch (err) {
+      console.error("Failed to update alert:", err)
+    }
+  }, [fetchAlerts])
 
-  const totalPages = Math.ceil(filteredAlerts.length / ITEMS_PER_PAGE)
+  const handleRetry = useCallback(() => {
+    fetchAlerts()
+  }, [fetchAlerts])
+
+  // Render loading state
+  if (loading) {
+    return (
+      <>
+        <VantaBackground />
+        <div className="min-h-screen flex flex-col">
+          <main className="flex-1 container mx-auto px-4 py-8">
+            <AlertsHeader searchValue={searchQuery} onSearchChange={handleSearchChange} onNewAlert={handleNewAlert} />
+            <LoadingSpinner message="Loading alerts..." />
+          </main>
+          <Footer />
+        </div>
+      </>
+    )
+  }
+
+  // Render error state
+  if (error) {
+    return (
+      <>
+        <VantaBackground />
+        <div className="min-h-screen flex flex-col">
+          <main className="flex-1 container mx-auto px-4 py-8">
+            <AlertsHeader searchValue={searchQuery} onSearchChange={handleSearchChange} onNewAlert={handleNewAlert} />
+            <ErrorMessage message={error} onRetry={handleRetry} />
+          </main>
+          <Footer />
+        </div>
+      </>
+    )
+  }
 
   return (
     <>
@@ -105,28 +156,28 @@ export default function AlertsPage() {
           />
 
           <AlertStats
-            totalAlerts={stats.totalAlerts}
+            totalAlerts={stats.total}
             critical={stats.critical}
             unresolved={stats.unresolved}
-            falsePositives={stats.falsePositives}
+            falsePositives={stats.false_positives}
           />
 
-          <AlertTable alerts={paginatedAlerts} onActionClick={handleAlertAction} />
-
-          {filteredAlerts.length > 0 && (
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              totalItems={filteredAlerts.length}
-              itemsPerPage={ITEMS_PER_PAGE}
-              onPageChange={handlePageChange}
+          {alerts.length > 0 ? (
+            <>
+              <AlertTable alerts={alerts} onActionClick={handleAlertAction} />
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                itemsPerPage={ITEMS_PER_PAGE}
+                onPageChange={handlePageChange}
+              />
+            </>
+          ) : (
+            <EmptyState
+              title="No alerts found"
+              message="There are no alerts matching your current filters."
             />
-          )}
-
-          {filteredAlerts.length === 0 && (
-            <div className="text-center py-12">
-              <p className="text-gray-400 text-lg">No alerts found matching your filters.</p>
-            </div>
           )}
         </main>
 

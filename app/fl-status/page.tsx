@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo, useEffect } from "react"
 import { Footer } from "@/components/footer"
 import { VantaBackground } from "@/components/vanta-background"
 import { FLHeader } from "@/components/fl-header"
@@ -9,18 +9,59 @@ import { ClientStatusCards } from "@/components/client-status-cards"
 import { PrivacyMetrics } from "@/components/privacy-metrics"
 import { RoundHistory } from "@/components/round-history"
 import { FLFooter } from "@/components/fl-footer"
-import { mockFLRound, mockFLClients, mockPrivacyMetrics, mockRoundHistory } from "@/utils/mock-data"
+import { LoadingSpinner } from "@/components/loading-spinner"
+import { ErrorMessage } from "@/components/error-message"
+import { apiClient, type FLRound, type FLClient, type PrivacyMetrics as PrivacyMetricsType } from "@/lib/api-client"
+import { mockRoundHistory } from "@/utils/mock-data"
 
 export default function FLStatusPage() {
-  const [currentRound] = useState(mockFLRound)
-  const [clients] = useState(mockFLClients)
-  const [privacyMetrics] = useState(mockPrivacyMetrics)
-  const [roundHistory] = useState(mockRoundHistory)
-  const [lastRoundStartTime] = useState(new Date(Date.now() - 15 * 60000))
+  // State
+  const [currentRound, setCurrentRound] = useState<FLRound | null>(null)
+  const [clients, setClients] = useState<FLClient[]>([])
+  const [privacyMetrics, setPrivacyMetrics] = useState<PrivacyMetricsType | null>(null)
+  const [roundHistory] = useState(mockRoundHistory) // TODO: Fetch from API
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleTriggerRound = useCallback(() => {
-    console.log("Trigger new round clicked")
-    alert("New FL round triggered (demo)")
+  // Fetch FL status data
+  const fetchFLStatus = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const [roundData, clientsData, metricsData] = await Promise.all([
+        apiClient.getCurrentFLRound(),
+        apiClient.getFLClients(),
+        apiClient.getPrivacyMetrics(),
+      ])
+
+      setCurrentRound(roundData)
+      setClients(clientsData)
+      setPrivacyMetrics(metricsData)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch FL status")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Fetch data on mount
+  useEffect(() => {
+    fetchFLStatus()
+  }, [fetchFLStatus])
+
+  // Handle trigger FL round
+  const handleTriggerRound = useCallback(async () => {
+    try {
+      const newRound = await apiClient.triggerFLRound()
+      setCurrentRound(newRound)
+      // Refresh clients after triggering
+      const clientsData = await apiClient.getFLClients()
+      setClients(clientsData)
+    } catch (err) {
+      console.error("Failed to trigger FL round:", err)
+      setError(err instanceof Error ? err.message : "Failed to trigger FL round")
+    }
   }, [])
 
   const handleConfiguration = useCallback(() => {
@@ -28,7 +69,50 @@ export default function FLStatusPage() {
     alert("Configuration modal would open (demo)")
   }, [])
 
+  const handleRetry = useCallback(() => {
+    fetchFLStatus()
+  }, [fetchFLStatus])
+
   const activeClientsCount = useMemo(() => clients.filter((c) => c.status === "active").length, [clients])
+  
+  const lastRoundStartTime = useMemo(() => {
+    if (currentRound?.start_time) {
+      return new Date(currentRound.start_time)
+    }
+    return new Date(Date.now() - 15 * 60000)
+  }, [currentRound])
+
+  // Render loading state
+  if (loading) {
+    return (
+      <>
+        <VantaBackground />
+        <div className="min-h-screen flex flex-col">
+          <main className="flex-1 container mx-auto px-4 py-8">
+            <FLHeader onTriggerRound={handleTriggerRound} onConfiguration={handleConfiguration} />
+            <LoadingSpinner message="Loading FL status..." />
+          </main>
+          <Footer />
+        </div>
+      </>
+    )
+  }
+
+  // Render error state
+  if (error) {
+    return (
+      <>
+        <VantaBackground />
+        <div className="min-h-screen flex flex-col">
+          <main className="flex-1 container mx-auto px-4 py-8">
+            <FLHeader onTriggerRound={handleTriggerRound} onConfiguration={handleConfiguration} />
+            <ErrorMessage message={error} onRetry={handleRetry} />
+          </main>
+          <Footer />
+        </div>
+      </>
+    )
+  }
 
   return (
     <>
@@ -37,35 +121,46 @@ export default function FLStatusPage() {
         <main className="flex-1 container mx-auto px-4 py-8">
           <FLHeader onTriggerRound={handleTriggerRound} onConfiguration={handleConfiguration} />
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            <RoundProgressCard
-              roundNumber={currentRound.roundNumber}
-              progress={currentRound.progress}
-              phase={currentRound.phase}
-              timeRemaining={currentRound.timeRemaining}
-              clientsActive={activeClientsCount}
-              totalClients={currentRound.totalClients}
-              epsilon={currentRound.epsilon}
-              modelAccuracy={currentRound.modelAccuracy}
-            />
+          {currentRound ? (
+            <>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <RoundProgressCard
+                  roundNumber={currentRound.round_number}
+                  progress={currentRound.progress}
+                  phase={currentRound.phase}
+                  timeRemaining={0} // TODO: Calculate from start_time
+                  clientsActive={activeClientsCount}
+                  totalClients={clients.length}
+                  epsilon={currentRound.epsilon}
+                  modelAccuracy={currentRound.model_accuracy}
+                />
 
-            <ClientStatusCards clients={clients} />
-          </div>
+                <ClientStatusCards clients={clients} />
+              </div>
 
-          <div className="grid grid-cols-1 gap-6 mb-8">
-            <PrivacyMetrics
-              epsilon={privacyMetrics.epsilon}
-              delta={privacyMetrics.delta}
-              dataSize={privacyMetrics.dataSize}
-              encryption={privacyMetrics.encryption}
-            />
-          </div>
+              {privacyMetrics && (
+                <div className="grid grid-cols-1 gap-6 mb-8">
+                  <PrivacyMetrics
+                    epsilon={privacyMetrics.epsilon}
+                    delta={privacyMetrics.delta}
+                    dataSize={privacyMetrics.data_size}
+                    encryption={privacyMetrics.encryption}
+                  />
+                </div>
+              )}
 
-          <div className="grid grid-cols-1 gap-6">
-            <RoundHistory rounds={roundHistory} />
-          </div>
+              <div className="grid grid-cols-1 gap-6">
+                <RoundHistory rounds={roundHistory} />
+              </div>
 
-          <FLFooter lastRoundStartTime={lastRoundStartTime} />
+              <FLFooter lastRoundStartTime={lastRoundStartTime} />
+            </>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-gray-400 text-lg mb-4">No active FL round</p>
+              <p className="text-gray-500 text-sm">Click "Trigger FL Round" to start a new training round</p>
+            </div>
+          )}
         </main>
 
         <Footer />

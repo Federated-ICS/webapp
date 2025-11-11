@@ -2,11 +2,11 @@
 
 import { Card } from "./card"
 import { AlertTableRow } from "./alert-table-row"
-import type { Alert } from "@/utils/mock-data"
+import type { Alert } from "@/lib/api-client"
 
 interface AlertTableProps {
   alerts: Alert[]
-  onActionClick: (alertId: string) => void
+  onActionClick: (alertId: string, action: string) => void
 }
 
 export function AlertTable({ alerts, onActionClick }: AlertTableProps) {

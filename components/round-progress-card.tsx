@@ -13,7 +13,7 @@ interface RoundProgressCardProps {
   clientsActive: number
   totalClients: number
   epsilon: number
-  modelAccuracy: number
+  modelAccuracy: number | null
 }
 
 export function RoundProgressCard({
@@ -69,11 +69,11 @@ export function RoundProgressCard({
             </div>
             <div>
               <p className="text-xs text-gray-500">Privacy (ε)</p>
-              <p className="text-lg font-mono text-yellow-400">{epsilon.toFixed(2)}</p>
+              <p className="text-lg font-mono text-yellow-400">{epsilon?.toFixed(2) ?? '0.00'}</p>
             </div>
             <div>
               <p className="text-xs text-gray-500">Model Accuracy</p>
-              <p className="text-lg font-mono text-green-400">{modelAccuracy.toFixed(1)}%</p>
+              <p className="text-lg font-mono text-green-400">{modelAccuracy?.toFixed(1) ?? '0.0'}%</p>
             </div>
           </div>
         </div>
