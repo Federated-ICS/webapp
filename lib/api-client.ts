@@ -64,6 +64,34 @@ export interface PrivacyMetrics {
   privacy_budget_remaining: number;
 }
 
+export interface TechniqueNode {
+  id: string;
+  name: string;
+  type: 'current' | 'predicted';
+  probability: number;
+}
+
+export interface TechniqueLink {
+  source: string;
+  target: string;
+  probability: number;
+}
+
+export interface AttackGraph {
+  nodes: TechniqueNode[];
+  links: TechniqueLink[];
+}
+
+export interface TechniqueDetails {
+  id: string;
+  name: string;
+  description: string;
+  detection?: string;
+  mitigation?: string;
+  platforms: string[];
+  tactics: string[];
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -165,6 +193,19 @@ class ApiClient {
 
   async getLatestPrediction() {
     return this.request('/api/predictions/latest');
+  }
+
+  // MITRE ATT&CK API
+  async getAttackGraph(): Promise<AttackGraph> {
+    return this.request('/api/mitre/graph');
+  }
+
+  async getAllTechniques(): Promise<TechniqueDetails[]> {
+    return this.request('/api/mitre/techniques');
+  }
+
+  async getTechniqueDetails(techniqueId: string): Promise<TechniqueDetails> {
+    return this.request(`/api/mitre/technique/${techniqueId}`);
   }
 }
 

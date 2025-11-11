@@ -8,8 +8,10 @@ import { ForceDirectedGraph, type ForceDirectedGraphHandle } from "@/components/
 import { TechniqueDetailsSidebar } from "@/components/technique-details-sidebar"
 import { AttackTimeline } from "@/components/attack-timeline"
 import { Card } from "@/components/card"
-import { mockAttackGraphData, mockTechniqueDetails } from "@/utils/attack-graph-data"
-import type { Node, TechniqueDetails } from "@/utils/attack-graph-data"
+import { LoadingSpinner } from "@/components/loading-spinner"
+import { ErrorMessage } from "@/components/error-message"
+import { apiClient, type TechniqueDetails } from "@/lib/api-client"
+import type { Node, Link } from "@/utils/attack-graph-data"
 
 export default function AttackGraphPage() {
   const graphContainerRef = useRef<HTMLDivElement>(null)
@@ -17,12 +19,36 @@ export default function AttackGraphPage() {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
   const [techniqueDetails, setTechniqueDetails] = useState<TechniqueDetails | null>(null)
   const [isSidebarVisible, setIsSidebarVisible] = useState(true)
-  const [graphData] = useState(mockAttackGraphData)
+  const [graphData, setGraphData] = useState<{ nodes: Node[]; links: Link[] } | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Fetch attack graph data
+  const fetchGraphData = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const data = await apiClient.getAttackGraph()
+      setGraphData(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch attack graph")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Fetch data on mount
+  useEffect(() => {
+    fetchGraphData()
+  }, [fetchGraphData])
 
   // Fetch technique details when node is selected
   useEffect(() => {
-    if (selectedNode && selectedNode.id in mockTechniqueDetails) {
-      setTechniqueDetails(mockTechniqueDetails[selectedNode.id])
+    if (selectedNode) {
+      apiClient.getTechniqueDetails(selectedNode.id)
+        .then(setTechniqueDetails)
+        .catch(console.error)
     }
   }, [selectedNode])
 
@@ -43,6 +69,58 @@ export default function AttackGraphPage() {
   const handleCloseSidebar = useCallback(() => {
     setIsSidebarVisible(false)
   }, [])
+
+  const handleRetry = useCallback(() => {
+    fetchGraphData()
+  }, [fetchGraphData])
+
+  // Render loading state
+  if (loading) {
+    return (
+      <>
+        <VantaBackground />
+        <div className="min-h-screen flex flex-col">
+          <main className="flex-1 container mx-auto px-4 py-8">
+            <LoadingSpinner message="Loading attack graph..." />
+          </main>
+          <Footer />
+        </div>
+      </>
+    )
+  }
+
+  // Render error state
+  if (error) {
+    return (
+      <>
+        <VantaBackground />
+        <div className="min-h-screen flex flex-col">
+          <main className="flex-1 container mx-auto px-4 py-8">
+            <ErrorMessage message={error} onRetry={handleRetry} />
+          </main>
+          <Footer />
+        </div>
+      </>
+    )
+  }
+
+  // Render empty state
+  if (!graphData || graphData.nodes.length === 0) {
+    return (
+      <>
+        <VantaBackground />
+        <div className="min-h-screen flex flex-col">
+          <main className="flex-1 container mx-auto px-4 py-8">
+            <AttackGraphHeader onResetView={handleResetView} onToggleSidebar={handleToggleSidebar} />
+            <div className="text-center py-12">
+              <p className="text-gray-400 text-lg">No attacks detected</p>
+            </div>
+          </main>
+          <Footer />
+        </div>
+      </>
+    )
+  }
 
   const currentAttacks = graphData.nodes.filter((n) => n.type === "current").length
   const predictedAttacks = graphData.nodes.filter((n) => n.type === "predicted").length
