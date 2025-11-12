@@ -3,8 +3,8 @@
 interface TechniqueMetricsProps {
   type: "current" | "predicted"
   probability: number
-  platforms: string
-  tactics: string
+  platforms: string[]
+  tactics: string[]
 }
 
 export function TechniqueMetrics({ type, probability, platforms, tactics }: TechniqueMetricsProps) {
@@ -29,12 +29,12 @@ export function TechniqueMetrics({ type, probability, platforms, tactics }: Tech
 
       <div>
         <p className="text-gray-400 text-sm mb-1">Platforms</p>
-        <p className="text-sm text-gray-300">{platforms}</p>
+        <p className="text-sm text-gray-300">{platforms.join(", ")}</p>
       </div>
 
       <div>
         <p className="text-gray-400 text-sm mb-1">Tactics</p>
-        <p className="text-sm text-gray-300">{tactics}</p>
+        <p className="text-sm text-gray-300">{tactics.join(", ")}</p>
       </div>
     </div>
   )

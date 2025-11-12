@@ -3,7 +3,7 @@
 import { Shield } from "lucide-react"
 
 interface TechniqueMitigationProps {
-  mitigation: string
+  mitigation?: string
 }
 
 export function TechniqueMitigation({ mitigation }: TechniqueMitigationProps) {

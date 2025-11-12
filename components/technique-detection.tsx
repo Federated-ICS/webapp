@@ -3,7 +3,7 @@
 import { Eye } from "lucide-react"
 
 interface TechniqueDetectionProps {
-  detection: string
+  detection?: string
 }
 
 export function TechniqueDetection({ detection }: TechniqueDetectionProps) {

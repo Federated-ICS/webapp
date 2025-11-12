@@ -10,7 +10,7 @@ interface ForceDirectedGraphProps {
   nodes: Node[]
   links: Link[]
   onNodeClick: (node: Node) => void
-  containerRef: React.RefObject<HTMLDivElement>
+  containerRef: React.RefObject<HTMLDivElement | null>
 }
 
 export interface ForceDirectedGraphHandle {

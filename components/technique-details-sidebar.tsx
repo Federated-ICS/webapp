@@ -6,7 +6,8 @@ import { TechniqueMetrics } from "@/components/technique-metrics"
 import { TechniqueDescription } from "@/components/technique-description"
 import { TechniqueDetection } from "@/components/technique-detection"
 import { TechniqueMitigation } from "@/components/technique-mitigation"
-import type { Node, TechniqueDetails } from "@/utils/attack-graph-data"
+import type { Node } from "@/utils/attack-graph-data"
+import type { TechniqueDetails } from "@/lib/api-client"
 
 interface TechniqueDetailsSidebarProps {
   isVisible: boolean
