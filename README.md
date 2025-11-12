@@ -6,6 +6,7 @@ A modern cybersecurity monitoring and threat intelligence dashboard built with N
 ![React](https://img.shields.io/badge/React-19.2-blue?style=flat-square&logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?style=flat-square&logo=typescript)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-4.1-38bdf8?style=flat-square&logo=tailwind-css)
+![CI](https://github.com/Federated-ICS/webapp/workflows/Frontend%20CI%20Pipeline/badge.svg)
 
 ## ✨ Features
 
@@ -43,15 +44,15 @@ A modern cybersecurity monitoring and threat intelligence dashboard built with N
 
 ### Prerequisites
 
-- **Node.js** 18.x or higher
-- **pnpm** (recommended) or npm
+- **Node.js** 22.x or higher
+- **pnpm** 10.x (recommended) or npm
 
 ### Installation
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/cybersentry-watchtower.git
-   cd cybersentry-watchtower
+   git clone https://github.com/Federated-ICS/webapp.git
+   cd webapp
    ```
 
 2. **Install dependencies**
@@ -123,29 +124,24 @@ cybersentry-watchtower/
 
 ## 📊 Data Sources
 
-Currently, the application uses **mock data** for demonstration purposes. The data includes:
+The application connects to a backend API for real-time data:
 
-- **Alerts**: 20 sample security alerts with various severities and statuses
-- **FL Clients**: 6 facility clients with training metrics
-- **Attack Techniques**: 6 MITRE ATT&CK techniques with relationships
+- **Alerts**: Security alerts from multiple detection layers (LSTM, Isolation Forest, Physics Model, System Monitor)
+- **FL Clients**: Federated learning client status and training metrics
+- **Attack Techniques**: MITRE ATT&CK techniques and predictions
 - **Privacy Metrics**: Differential privacy parameters (epsilon, delta)
 
-### Integrating Real Data
+### Backend Configuration
 
-To connect to a real backend:
+Set the backend API URL in your environment:
 
-1. Create API routes in `app/api/`
-2. Replace mock data imports with API calls
-3. Update environment variables in `.env.local`
-
-Example:
-```typescript
-// app/api/alerts/route.ts
-export async function GET() {
-  const alerts = await fetch('https://your-backend-api.com/alerts');
-  return Response.json(alerts);
-}
+```bash
+# .env.local
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_WS_URL=ws://localhost:8000/ws
 ```
+
+The API client is located in `lib/api-client.ts` and handles all backend communication.
 
 ## 🎨 Customization
 
@@ -176,6 +172,22 @@ All components are modular and can be customized independently. Key components:
 - `pnpm build` - Build for production
 - `pnpm start` - Run production build
 - `pnpm lint` - Run ESLint for code quality
+- `pnpm test` - Run tests with Vitest
+- `pnpm test:ui` - Run tests with UI
+- `pnpm test:coverage` - Run tests with coverage report
+- `pnpm type-check` - Run TypeScript type checking
+
+## 🔄 CI/CD Pipeline
+
+The project includes a GitHub Actions CI pipeline that runs on every push and pull request:
+
+- **Linting**: ESLint code quality checks
+- **Testing**: Vitest unit and integration tests with coverage
+- **Type Checking**: TypeScript compilation (currently disabled, pending fixes)
+- **Building**: Next.js production build verification
+- **Coverage**: Automatic upload to Codecov
+
+See `.github/workflows/ci.yml` for the complete pipeline configuration.
 
 ## 📄 License
 
