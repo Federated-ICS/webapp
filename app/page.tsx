@@ -12,6 +12,7 @@ import { QuickActionsCard } from "@/components/quick-actions-card"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import { ErrorMessage } from "@/components/error-message"
 import { apiClient, type Alert, type AlertStats, type FLRound, type FLClient } from "@/lib/api-client"
+import { useWebSocket } from "@/lib/useWebSocket"
 import { formatDistanceToNow } from "date-fns"
 
 export default function DashboardPage() {
@@ -29,6 +30,11 @@ export default function DashboardPage() {
     techniqueName: "Exploit Public-Facing Application",
     confidence: 76,
     timelineProgress: 65,
+  })
+
+  // WebSocket connection for real-time updates
+  const { lastMessage, subscribe, isConnected } = useWebSocket({
+    autoConnect: true,
   })
 
   // Fetch dashboard data
@@ -65,6 +71,54 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchDashboardData()
   }, [fetchDashboardData])
+
+  // Subscribe to dashboard room when WebSocket connects
+  useEffect(() => {
+    if (isConnected) {
+      subscribe('dashboard')
+    }
+  }, [isConnected, subscribe])
+
+  // Handle WebSocket messages for real-time updates
+  useEffect(() => {
+    if (!lastMessage) return
+
+    switch (lastMessage.type) {
+      case 'dashboard_update':
+        // Update alert stats if provided
+        if (lastMessage.data?.alertStats) {
+          setAlertStats(lastMessage.data.alertStats)
+        }
+        break
+
+      case 'alert_created':
+        // Add new alert to recent alerts (keep only top 3)
+        if (lastMessage.data) {
+          setRecentAlerts((prev) => {
+            // Avoid duplicates
+            if (prev.some((a) => a.id === lastMessage.data.id)) {
+              return prev
+            }
+            return [lastMessage.data, ...prev].slice(0, 3)
+          })
+        }
+        break
+
+      case 'fl_progress':
+        // Update FL round progress
+        if (lastMessage.data && currentRound) {
+          setCurrentRound((prev) => {
+            if (!prev) return prev
+            return {
+              ...prev,
+              progress: lastMessage.data.progress ?? prev.progress,
+              model_accuracy: lastMessage.data.model_accuracy ?? prev.model_accuracy,
+            }
+          })
+        }
+        break
+    }
+  }, [lastMessage, currentRound])
 
   const handleAction = (action: string) => {
     console.log("Action triggered:", action)

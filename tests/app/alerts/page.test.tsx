@@ -1,9 +1,58 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { server } from '../../setup'
 import { http, HttpResponse } from 'msw'
 import AlertsPage from '@/app/alerts/page'
+
+// Mock WebSocket
+class MockWebSocket {
+  static CONNECTING = 0
+  static OPEN = 1
+  static CLOSING = 2
+  static CLOSED = 3
+
+  readyState = MockWebSocket.CONNECTING
+  onopen: ((event: Event) => void) | null = null
+  onclose: ((event: CloseEvent) => void) | null = null
+  onmessage: ((event: MessageEvent) => void) | null = null
+  onerror: ((event: Event) => void) | null = null
+  url: string
+  sentMessages: string[] = []
+
+  constructor(url: string) {
+    this.url = url
+    // Simulate connection opening
+    setTimeout(() => {
+      this.readyState = MockWebSocket.OPEN
+      if (this.onopen) {
+        this.onopen(new Event('open'))
+      }
+    }, 10)
+  }
+
+  send(data: string) {
+    this.sentMessages.push(data)
+  }
+
+  close() {
+    this.readyState = MockWebSocket.CLOSED
+    if (this.onclose) {
+      this.onclose(new CloseEvent('close'))
+    }
+  }
+
+  // Helper to simulate receiving a message
+  simulateMessage(data: any) {
+    if (this.onmessage) {
+      this.onmessage(new MessageEvent('message', {
+        data: JSON.stringify(data)
+      }))
+    }
+  }
+}
+
+let mockWs: MockWebSocket | null = null
 
 describe('Alerts Page Integration', () => {
   const API_URL = 'http://localhost:8000'
@@ -11,6 +60,21 @@ describe('Alerts Page Integration', () => {
   beforeEach(() => {
     // Reset any runtime request handlers we may add during tests
     server.resetHandlers()
+    
+    // Mock WebSocket
+    mockWs = null
+    const WebSocketMock = class extends MockWebSocket {
+      constructor(url: string) {
+        super(url)
+        mockWs = this
+      }
+    }
+    vi.stubGlobal('WebSocket', WebSocketMock)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    mockWs = null
   })
 
   describe('Initial Load', () => {
@@ -481,6 +545,284 @@ describe('Alerts Page Integration', () => {
       // Verify UI refreshed with updated status
       await waitFor(() => {
         expect(updateCallCount).toBeGreaterThan(0)
+      })
+    })
+  })
+
+  describe('WebSocket Real-Time Updates', () => {
+    it('should connect to WebSocket on mount', async () => {
+      server.use(
+        http.get(`${API_URL}/api/alerts`, () => {
+          return HttpResponse.json({
+            alerts: [],
+            total: 0,
+            page: 1,
+            pages: 0,
+            limit: 10,
+          })
+        }),
+        http.get(`${API_URL}/api/alerts/stats`, () => {
+          return HttpResponse.json({
+            total: 0,
+            critical: 0,
+            unresolved: 0,
+            false_positives: 0,
+          })
+        })
+      )
+
+      render(<AlertsPage />)
+
+      await waitFor(() => {
+        expect(mockWs).not.toBeNull()
+      })
+
+      expect(mockWs?.url).toContain('/ws')
+    })
+
+    it('should subscribe to alerts room after connection', async () => {
+      server.use(
+        http.get(`${API_URL}/api/alerts`, () => {
+          return HttpResponse.json({
+            alerts: [],
+            total: 0,
+            page: 1,
+            pages: 0,
+            limit: 10,
+          })
+        }),
+        http.get(`${API_URL}/api/alerts/stats`, () => {
+          return HttpResponse.json({
+            total: 0,
+            critical: 0,
+            unresolved: 0,
+            false_positives: 0,
+          })
+        })
+      )
+
+      render(<AlertsPage />)
+
+      await waitFor(() => {
+        expect(mockWs?.sentMessages.length).toBeGreaterThan(0)
+      })
+
+      // Check if subscribe message was sent
+      const subscribeMessage = mockWs?.sentMessages.find(msg => {
+        const parsed = JSON.parse(msg)
+        return parsed.action === 'subscribe' && parsed.room === 'alerts'
+      })
+
+      expect(subscribeMessage).toBeDefined()
+    })
+
+    it('should display new alert when alert_created event is received', async () => {
+      server.use(
+        http.get(`${API_URL}/api/alerts`, () => {
+          return HttpResponse.json({
+            alerts: [
+              {
+                id: '1',
+                title: 'Existing Alert',
+                description: 'Test',
+                severity: 'medium',
+                facility_id: 'facility_a',
+                status: 'new',
+                timestamp: '2024-01-15T10:00:00Z',
+                sources: [],
+              },
+            ],
+            total: 1,
+            page: 1,
+            pages: 1,
+            limit: 10,
+          })
+        }),
+        http.get(`${API_URL}/api/alerts/stats`, () => {
+          return HttpResponse.json({
+            total: 1,
+            critical: 0,
+            unresolved: 1,
+            false_positives: 0,
+          })
+        })
+      )
+
+      render(<AlertsPage />)
+
+      // Wait for initial load
+      await waitFor(() => {
+        expect(screen.getByText('Existing Alert')).toBeInTheDocument()
+      })
+
+      // Simulate WebSocket message for new alert
+      const newAlert = {
+        id: '2',
+        title: 'Real-Time Alert',
+        description: 'New alert via WebSocket',
+        severity: 'critical',
+        facility_id: 'facility_b',
+        status: 'new',
+        timestamp: new Date().toISOString(),
+        sources: [],
+      }
+
+      mockWs?.simulateMessage({
+        type: 'alert_created',
+        data: newAlert,
+      })
+
+      // New alert should appear in the list
+      await waitFor(() => {
+        expect(screen.getByText('Real-Time Alert')).toBeInTheDocument()
+      })
+
+      // Both alerts should be visible
+      expect(screen.getByText('Existing Alert')).toBeInTheDocument()
+    })
+
+    it('should update alert when alert_updated event is received', async () => {
+      server.use(
+        http.get(`${API_URL}/api/alerts`, () => {
+          return HttpResponse.json({
+            alerts: [
+              {
+                id: '1',
+                title: 'Test Alert',
+                description: 'Test',
+                severity: 'high',
+                facility_id: 'facility_a',
+                status: 'new',
+                timestamp: '2024-01-15T10:00:00Z',
+                sources: [],
+              },
+            ],
+            total: 1,
+            page: 1,
+            pages: 1,
+            limit: 10,
+          })
+        }),
+        http.get(`${API_URL}/api/alerts/stats`, () => {
+          return HttpResponse.json({
+            total: 1,
+            critical: 0,
+            unresolved: 1,
+            false_positives: 0,
+          })
+        })
+      )
+
+      render(<AlertsPage />)
+
+      // Wait for initial load
+      await waitFor(() => {
+        expect(screen.getByText('Test Alert')).toBeInTheDocument()
+      })
+
+      // Simulate WebSocket message for alert update
+      mockWs?.simulateMessage({
+        type: 'alert_updated',
+        data: {
+          id: '1',
+          title: 'Test Alert',
+          description: 'Test',
+          severity: 'high',
+          facility_id: 'facility_a',
+          status: 'acknowledged',
+          timestamp: '2024-01-15T10:00:00Z',
+          sources: [],
+        },
+      })
+
+      // Status should update in the UI
+      await waitFor(() => {
+        expect(screen.getByText(/acknowledged/i)).toBeInTheDocument()
+      })
+    })
+
+    it('should update stats when dashboard_update event is received', async () => {
+      server.use(
+        http.get(`${API_URL}/api/alerts`, () => {
+          return HttpResponse.json({
+            alerts: [],
+            total: 0,
+            page: 1,
+            pages: 0,
+            limit: 10,
+          })
+        }),
+        http.get(`${API_URL}/api/alerts/stats`, () => {
+          return HttpResponse.json({
+            total: 5,
+            critical: 1,
+            unresolved: 3,
+            false_positives: 0,
+          })
+        })
+      )
+
+      render(<AlertsPage />)
+
+      // Wait for initial stats
+      await waitFor(() => {
+        expect(screen.getByText('5')).toBeInTheDocument()
+      })
+
+      // Simulate WebSocket message with updated stats
+      mockWs?.simulateMessage({
+        type: 'dashboard_update',
+        data: {
+          stats: {
+            total: 10,
+            critical: 3,
+            unresolved: 7,
+            false_positives: 1,
+          },
+        },
+      })
+
+      // Stats should update
+      await waitFor(() => {
+        expect(screen.getByText('10')).toBeInTheDocument()
+      })
+      expect(screen.getByText('3')).toBeInTheDocument()
+      expect(screen.getByText('7')).toBeInTheDocument()
+    })
+
+    it('should handle WebSocket disconnection gracefully', async () => {
+      server.use(
+        http.get(`${API_URL}/api/alerts`, () => {
+          return HttpResponse.json({
+            alerts: [],
+            total: 0,
+            page: 1,
+            pages: 0,
+            limit: 10,
+          })
+        }),
+        http.get(`${API_URL}/api/alerts/stats`, () => {
+          return HttpResponse.json({
+            total: 0,
+            critical: 0,
+            unresolved: 0,
+            false_positives: 0,
+          })
+        })
+      )
+
+      render(<AlertsPage />)
+
+      await waitFor(() => {
+        expect(mockWs).not.toBeNull()
+      })
+
+      // Simulate disconnection
+      mockWs?.close()
+
+      // Page should still be functional (REST API fallback)
+      await waitFor(() => {
+        expect(screen.getByText(/No alerts found/i)).toBeInTheDocument()
       })
     })
   })

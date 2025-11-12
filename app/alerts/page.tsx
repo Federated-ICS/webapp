@@ -12,6 +12,7 @@ import { LoadingSpinner } from "@/components/loading-spinner"
 import { ErrorMessage } from "@/components/error-message"
 import { EmptyState } from "@/components/empty-state"
 import { apiClient, type Alert } from "@/lib/api-client"
+import { useWebSocket } from "@/lib/useWebSocket"
 
 const ITEMS_PER_PAGE = 10
 
@@ -37,6 +38,11 @@ export default function AlertsPage() {
   const [selectedTimeRange, setSelectedTimeRange] = useState("Last 30 days")
   const [selectedFacility, setSelectedFacility] = useState("All Facilities")
   const [currentPage, setCurrentPage] = useState(1)
+
+  // WebSocket connection for real-time updates
+  const { lastMessage, subscribe, isConnected } = useWebSocket({
+    autoConnect: true,
+  })
 
   // Fetch alerts from API
   const fetchAlerts = useCallback(async () => {
@@ -72,6 +78,51 @@ export default function AlertsPage() {
   useEffect(() => {
     fetchAlerts()
   }, [fetchAlerts])
+
+  // Subscribe to alerts room when WebSocket connects
+  useEffect(() => {
+    if (isConnected) {
+      subscribe('alerts')
+    }
+  }, [isConnected, subscribe])
+
+  // Handle WebSocket messages for real-time updates
+  useEffect(() => {
+    if (!lastMessage) return
+
+    switch (lastMessage.type) {
+      case 'alert_created':
+        // Add new alert to the top of the list
+        if (lastMessage.data) {
+          setAlerts((prev) => {
+            // Avoid duplicates
+            if (prev.some((a) => a.id === lastMessage.data.id)) {
+              return prev
+            }
+            return [lastMessage.data, ...prev]
+          })
+        }
+        break
+
+      case 'alert_updated':
+        // Update existing alert
+        if (lastMessage.data) {
+          setAlerts((prev) =>
+            prev.map((alert) =>
+              alert.id === lastMessage.data.id ? lastMessage.data : alert
+            )
+          )
+        }
+        break
+
+      case 'dashboard_update':
+        // Update stats if provided
+        if (lastMessage.data?.stats) {
+          setStats(lastMessage.data.stats)
+        }
+        break
+    }
+  }, [lastMessage])
 
   // Event handlers
   const handleFilterChange = useCallback((type: string, value: string) => {

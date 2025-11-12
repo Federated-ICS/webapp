@@ -12,6 +12,7 @@ import { FLFooter } from "@/components/fl-footer"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import { ErrorMessage } from "@/components/error-message"
 import { apiClient, type FLRound, type FLClient, type PrivacyMetrics as PrivacyMetricsType } from "@/lib/api-client"
+import { useWebSocket } from "@/lib/useWebSocket"
 import { mockRoundHistory } from "@/utils/mock-data"
 
 export default function FLStatusPage() {
@@ -22,6 +23,11 @@ export default function FLStatusPage() {
   const [roundHistory] = useState(mockRoundHistory) // TODO: Fetch from API
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // WebSocket connection for real-time updates
+  const { lastMessage, subscribe, isConnected } = useWebSocket({
+    autoConnect: true,
+  })
 
   // Fetch FL status data
   const fetchFLStatus = useCallback(async () => {
@@ -49,6 +55,40 @@ export default function FLStatusPage() {
   useEffect(() => {
     fetchFLStatus()
   }, [fetchFLStatus])
+
+  // Subscribe to fl-status room when WebSocket connects
+  useEffect(() => {
+    if (isConnected) {
+      subscribe('fl-status')
+    }
+  }, [isConnected, subscribe])
+
+  // Handle WebSocket messages for real-time updates
+  useEffect(() => {
+    if (!lastMessage) return
+
+    if (lastMessage.type === 'fl_progress') {
+      const data = lastMessage.data
+
+      // Update current round progress
+      if (data && currentRound) {
+        setCurrentRound((prev) => {
+          if (!prev) return prev
+          return {
+            ...prev,
+            progress: data.progress ?? prev.progress,
+            phase: data.phase ?? prev.phase,
+            model_accuracy: data.model_accuracy ?? prev.model_accuracy,
+          }
+        })
+      }
+
+      // Update clients if provided
+      if (data?.clients) {
+        setClients(data.clients)
+      }
+    }
+  }, [lastMessage, currentRound])
 
   // Handle trigger FL round
   const handleTriggerRound = useCallback(async () => {

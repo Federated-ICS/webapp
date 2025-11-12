@@ -11,6 +11,7 @@ import { Card } from "@/components/card"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import { ErrorMessage } from "@/components/error-message"
 import { apiClient, type TechniqueDetails } from "@/lib/api-client"
+import { useWebSocket } from "@/lib/useWebSocket"
 import type { Node, Link } from "@/utils/attack-graph-data"
 
 export default function AttackGraphPage() {
@@ -22,6 +23,11 @@ export default function AttackGraphPage() {
   const [graphData, setGraphData] = useState<{ nodes: Node[]; links: Link[] } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // WebSocket connection for real-time updates
+  const { lastMessage, subscribe, isConnected } = useWebSocket({
+    autoConnect: true,
+  })
 
   // Fetch attack graph data
   const fetchGraphData = useCallback(async () => {
@@ -42,6 +48,59 @@ export default function AttackGraphPage() {
   useEffect(() => {
     fetchGraphData()
   }, [fetchGraphData])
+
+  // Subscribe to attack-graph room when WebSocket connects
+  useEffect(() => {
+    if (isConnected) {
+      subscribe('attack-graph')
+    }
+  }, [isConnected, subscribe])
+
+  // Handle WebSocket messages for real-time attack detections
+  useEffect(() => {
+    if (!lastMessage || !graphData) return
+
+    if (lastMessage.type === 'attack_detected') {
+      const data = lastMessage.data
+
+      if (data?.technique_id) {
+        // Check if technique already exists
+        const existingNode = graphData.nodes.find(n => n.id === data.technique_id)
+
+        if (existingNode) {
+          // Update existing node confidence
+          setGraphData(prev => {
+            if (!prev) return prev
+            return {
+              ...prev,
+              nodes: prev.nodes.map(node =>
+                node.id === data.technique_id
+                  ? { ...node, confidence: data.confidence ?? node.confidence }
+                  : node
+              ),
+            }
+          })
+        } else {
+          // Add new detected technique
+          const newNode: Node = {
+            id: data.technique_id,
+            name: data.technique_name || data.technique_id,
+            type: 'detected',
+            tactics: [],
+            confidence: data.confidence ?? 0.5,
+          }
+
+          setGraphData(prev => {
+            if (!prev) return prev
+            return {
+              ...prev,
+              nodes: [...prev.nodes, newNode],
+            }
+          })
+        }
+      }
+    }
+  }, [lastMessage, graphData])
 
   // Fetch technique details when node is selected
   useEffect(() => {
