@@ -104,6 +104,17 @@ export default function DashboardPage() {
         }
         break
 
+      case 'alert_updated':
+        // Update existing alert in recent alerts list
+        if (lastMessage.data) {
+          setRecentAlerts((prev) => {
+            return prev.map((alert) =>
+              alert.id === lastMessage.data.id ? lastMessage.data : alert
+            )
+          })
+        }
+        break
+
       case 'fl_progress':
         // Update FL round progress
         if (lastMessage.data) {
@@ -115,6 +126,14 @@ export default function DashboardPage() {
               model_accuracy: lastMessage.data.model_accuracy ?? prev.model_accuracy,
             }
           })
+        }
+        break
+
+      case 'attack_detected':
+        // Log attack detection (dashboard doesn't display attack details)
+        if (lastMessage.data) {
+          console.log('Attack detected:', lastMessage.data.technique_id)
+          // Could trigger a notification or update attack prediction card in the future
         }
         break
     }

@@ -642,5 +642,117 @@ describe('Dashboard Page Integration', () => {
         expect(screen.getByText('New Real-Time Alert')).toBeInTheDocument()
       })
     })
+
+    it('should handle alert_updated events from WebSocket', async () => {
+      server.use(
+        http.get(`${API_URL}/api/alerts/stats`, () => {
+          return HttpResponse.json({
+            total: 1,
+            critical: 0,
+            unresolved: 1,
+            false_positives: 0,
+          })
+        }),
+        http.get(`${API_URL}/api/alerts`, () => {
+          return HttpResponse.json({
+            alerts: [
+              {
+                id: '1',
+                title: 'Test Alert',
+                description: 'Test',
+                severity: 'high',
+                facility_id: 'facility_a',
+                status: 'new',
+                timestamp: '2024-01-15T10:00:00Z',
+                sources: [],
+              },
+            ],
+            total: 1,
+            page: 1,
+            pages: 1,
+            limit: 3,
+          })
+        }),
+        http.get(`${API_URL}/api/fl/rounds/current`, () => {
+          return HttpResponse.json(null)
+        })
+      )
+
+      render(<DashboardPage />)
+
+      // Wait for initial alert
+      await waitFor(() => {
+        expect(screen.getByText('Test Alert')).toBeInTheDocument()
+      })
+
+      // Simulate alert update via WebSocket
+      mockWs?.simulateMessage({
+        type: 'alert_updated',
+        data: {
+          id: '1',
+          title: 'Test Alert',
+          description: 'Test',
+          severity: 'high',
+          facility_id: 'facility_a',
+          status: 'acknowledged',
+          timestamp: '2024-01-15T10:00:00Z',
+          sources: [],
+        },
+      })
+
+      // Alert should still be visible (status update doesn't remove it)
+      await waitFor(() => {
+        expect(screen.getByText('Test Alert')).toBeInTheDocument()
+      })
+    })
+
+    it('should handle attack_detected events from WebSocket', async () => {
+      server.use(
+        http.get(`${API_URL}/api/alerts/stats`, () => {
+          return HttpResponse.json({
+            total: 0,
+            critical: 0,
+            unresolved: 0,
+            false_positives: 0,
+          })
+        }),
+        http.get(`${API_URL}/api/alerts`, () => {
+          return HttpResponse.json({
+            alerts: [],
+            total: 0,
+            page: 1,
+            pages: 1,
+            limit: 3,
+          })
+        }),
+        http.get(`${API_URL}/api/fl/rounds/current`, () => {
+          return HttpResponse.json(null)
+        })
+      )
+
+      render(<DashboardPage />)
+
+      // Wait for initial load
+      await waitFor(() => {
+        expect(screen.getByText('System Status')).toBeInTheDocument()
+      })
+
+      // Simulate attack detected via WebSocket
+      mockWs?.simulateMessage({
+        type: 'attack_detected',
+        data: {
+          technique_id: 'T0800',
+          name: 'Activate Firmware Update Mode',
+          probability: 0.95,
+          timestamp: new Date().toISOString(),
+        },
+      })
+
+      // Dashboard should handle the event gracefully (no crash)
+      // Note: Dashboard doesn't display attack details, but should not error
+      await waitFor(() => {
+        expect(screen.getByText('System Status')).toBeInTheDocument()
+      })
+    })
   })
 })
