@@ -58,49 +58,75 @@ export default function AttackGraphPage() {
 
   // Handle WebSocket messages for real-time attack detections
   useEffect(() => {
-    if (!lastMessage || !graphData) return
+    if (!lastMessage) return
 
     if (lastMessage.type === 'attack_detected') {
       const data = lastMessage.data
 
       if (data?.technique_id) {
-        // Check if technique already exists
-        const existingNode = graphData.nodes.find(n => n.id === data.technique_id)
+        setGraphData(prev => {
+          if (!prev) return prev
+          
+          // Check if technique already exists
+          const existingNode = prev.nodes.find(n => n.id === data.technique_id)
 
-        if (existingNode) {
-          // Update existing node confidence
-          setGraphData(prev => {
-            if (!prev) return prev
+          if (existingNode) {
+            // Update existing node confidence/probability and type
             return {
               ...prev,
               nodes: prev.nodes.map(node =>
                 node.id === data.technique_id
-                  ? { ...node, confidence: data.confidence ?? node.confidence }
+                  ? { 
+                      ...node, 
+                      probability: data.confidence ?? data.probability ?? node.probability,
+                      type: data.type || node.type // Update type if provided
+                    }
                   : node
               ),
+              links: prev.links, // Keep existing links
             }
-          })
-        } else {
-          // Add new detected technique
-          const newNode: Node = {
-            id: data.technique_id,
-            name: data.technique_name || data.technique_id,
-            type: 'detected',
-            tactics: [],
-            confidence: data.confidence ?? 0.5,
-          }
+          } else {
+            // Add new detected technique
+            const newNode: Node = {
+              id: data.technique_id,
+              name: data.technique_name || data.technique_id,
+              type: data.type || 'current', // Use provided type or default to 'current'
+              probability: data.confidence ?? data.probability ?? 0.5,
+            }
 
-          setGraphData(prev => {
-            if (!prev) return prev
+            // Handle links if provided
+            const newLinks: Link[] = []
+            
+            // Add link from source technique if provided
+            if (data.source_technique_id) {
+              newLinks.push({
+                source: data.source_technique_id,
+                target: data.technique_id,
+                probability: data.link_probability ?? data.confidence ?? 0.5,
+              })
+            }
+            
+            // Add multiple links if provided
+            if (data.links && Array.isArray(data.links)) {
+              data.links.forEach((link: any) => {
+                newLinks.push({
+                  source: link.source,
+                  target: link.target,
+                  probability: link.probability ?? 0.5,
+                })
+              })
+            }
+
             return {
               ...prev,
               nodes: [...prev.nodes, newNode],
+              links: [...prev.links, ...newLinks],
             }
-          })
-        }
+          }
+        })
       }
     }
-  }, [lastMessage, graphData])
+  }, [lastMessage])
 
   // Fetch technique details when node is selected
   useEffect(() => {

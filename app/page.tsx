@@ -106,7 +106,7 @@ export default function DashboardPage() {
 
       case 'fl_progress':
         // Update FL round progress
-        if (lastMessage.data && currentRound) {
+        if (lastMessage.data) {
           setCurrentRound((prev) => {
             if (!prev) return prev
             return {
@@ -118,7 +118,7 @@ export default function DashboardPage() {
         }
         break
     }
-  }, [lastMessage, currentRound])
+  }, [lastMessage])
 
   const handleAction = (action: string) => {
     console.log("Action triggered:", action)

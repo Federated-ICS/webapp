@@ -7,8 +7,8 @@ interface ClientCardProps {
   name: string
   status: "active" | "delayed" | "offline"
   progress: number
-  loss: number
-  accuracy: number
+  loss?: number | null
+  accuracy?: number | null
 }
 
 export const ClientCard = ({ name, status, progress, loss, accuracy }: ClientCardProps) => {
@@ -43,11 +43,15 @@ export const ClientCard = ({ name, status, progress, loss, accuracy }: ClientCar
         <div className="flex justify-between items-end pt-2 border-t border-slate-700">
           <div>
             <p className="text-xs text-gray-500">Loss</p>
-            <p className="text-sm font-mono text-gray-400">{loss.toFixed(2)}</p>
+            <p className="text-sm font-mono text-gray-400">
+              {loss != null ? loss.toFixed(2) : 'N/A'}
+            </p>
           </div>
           <div>
             <p className="text-xs text-gray-500">Accuracy</p>
-            <p className="text-sm font-mono text-gray-400">{accuracy.toFixed(1)}%</p>
+            <p className="text-sm font-mono text-gray-400">
+              {accuracy != null ? `${accuracy.toFixed(1)}%` : 'N/A'}
+            </p>
           </div>
         </div>
       </div>

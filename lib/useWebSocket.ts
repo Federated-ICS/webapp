@@ -59,7 +59,9 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
       const ws = new WebSocket(url)
 
       ws.onopen = () => {
-        console.log('WebSocket connected')
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ WebSocket connected')
+        }
         setStatus('connected')
         reconnectAttemptsRef.current = 0
       }
@@ -69,36 +71,57 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
           const message = JSON.parse(event.data) as WebSocketMessage
           setLastMessage(message)
         } catch (err) {
-          console.error('Failed to parse WebSocket message:', err)
+          if (process.env.NODE_ENV === 'development') {
+            console.error('Failed to parse WebSocket message:', err)
+          }
         }
       }
 
-      ws.onerror = (event) => {
-        console.error('WebSocket error:', event)
-        setError(new Error('WebSocket connection error'))
+      ws.onerror = () => {
+        // WebSocket error - connection failed
+        // This is expected when backend is not running
+        // Error details are not available in browser WebSocket API
+        const errorMsg = `WebSocket connection failed (${url})`
+        
+        // Only log in development
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('⚠️ WebSocket connection failed - using REST API fallback')
+        }
+        
+        setError(new Error(errorMsg))
         setStatus('error')
       }
 
       ws.onclose = () => {
-        console.log('WebSocket disconnected')
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔌 WebSocket disconnected')
+        }
         setStatus('disconnected')
         wsRef.current = null
 
         // Attempt reconnection
         if (reconnectAttemptsRef.current < maxReconnectAttempts) {
           reconnectAttemptsRef.current++
-          console.log(
-            `Reconnecting... Attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts}`
-          )
+          if (process.env.NODE_ENV === 'development') {
+            console.log(
+              `🔄 Reconnecting... Attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts}`
+            )
+          }
           reconnectTimeoutRef.current = setTimeout(() => {
             connect()
           }, reconnectInterval)
+        } else {
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('⚠️ Max reconnection attempts reached - using REST API only')
+          }
         }
       }
 
       wsRef.current = ws
     } catch (err) {
-      console.error('Failed to create WebSocket:', err)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to create WebSocket:', err)
+      }
       setError(err as Error)
       setStatus('error')
     }

@@ -56,6 +56,11 @@ export default function FLStatusPage() {
     fetchFLStatus()
   }, [fetchFLStatus])
 
+  // Debug: Log when currentRound changes
+  useEffect(() => {
+    console.log('🔄 currentRound changed:', currentRound ? `Round #${currentRound.round_number}` : 'null')
+  }, [currentRound])
+
   // Subscribe to fl-status room when WebSocket connects
   useEffect(() => {
     if (isConnected) {
@@ -69,11 +74,36 @@ export default function FLStatusPage() {
 
     if (lastMessage.type === 'fl_progress') {
       const data = lastMessage.data
+      
+      // Debug logging
+      console.log('📨 FL Progress Update:', {
+        progress: data?.progress,
+        phase: data?.phase,
+        accuracy: data?.model_accuracy,
+        clientsCount: data?.clients?.length,
+        hasCurrentRound: !!currentRound,
+        willCreateRound: !currentRound,
+      })
 
       // Update current round progress
-      if (data && currentRound) {
+      if (data) {
         setCurrentRound((prev) => {
-          if (!prev) return prev
+          if (!prev) {
+            // Create a new round from WebSocket data if none exists
+            const newRound = {
+              id: data.round_id ?? 1,
+              round_number: data.round_number ?? 1,
+              status: 'in-progress' as const,
+              phase: (data.phase ?? 'training') as 'distributing' | 'training' | 'aggregating' | 'complete',
+              start_time: new Date().toISOString(),
+              progress: data.progress ?? 0,
+              epsilon: data.epsilon ?? 0.5,
+              model_accuracy: data.model_accuracy ?? null,
+              clients: [],
+            }
+            console.log('✨ Creating round from WebSocket data:', newRound)
+            return newRound
+          }
           return {
             ...prev,
             progress: data.progress ?? prev.progress,
@@ -84,11 +114,39 @@ export default function FLStatusPage() {
       }
 
       // Update clients if provided
-      if (data?.clients) {
-        setClients(data.clients)
+      if (data?.clients && Array.isArray(data.clients)) {
+        console.log(`📊 Updating ${data.clients.length} clients`)
+        setClients((prevClients) => {
+          // If no previous clients, just use the new ones
+          if (prevClients.length === 0) {
+            return data.clients
+          }
+          
+          // Merge clients by facility_id: update existing ones, keep others
+          const clientMap = new Map(prevClients.map(c => [c.facility_id, c]))
+          
+          // Update or add clients from WebSocket data
+          data.clients.forEach((newClient: any) => {
+            if (newClient.facility_id) {
+              const existing = clientMap.get(newClient.facility_id)
+              if (existing) {
+                // Merge with existing client data
+                clientMap.set(newClient.facility_id, {
+                  ...existing,
+                  ...newClient,
+                })
+              } else {
+                // Add new client
+                clientMap.set(newClient.facility_id, newClient)
+              }
+            }
+          })
+          
+          return Array.from(clientMap.values())
+        })
       }
     }
-  }, [lastMessage, currentRound])
+  }, [lastMessage])
 
   // Handle trigger FL round
   const handleTriggerRound = useCallback(async () => {
@@ -171,8 +229,8 @@ export default function FLStatusPage() {
                   timeRemaining={0} // TODO: Calculate from start_time
                   clientsActive={activeClientsCount}
                   totalClients={clients.length}
-                  epsilon={currentRound.epsilon}
-                  modelAccuracy={currentRound.model_accuracy}
+                  epsilon={currentRound.epsilon ?? 0}
+                  modelAccuracy={currentRound.model_accuracy ?? 0}
                 />
 
                 <ClientStatusCards clients={clients} />
