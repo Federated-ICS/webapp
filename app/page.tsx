@@ -75,13 +75,17 @@ export default function DashboardPage() {
   // Subscribe to dashboard room when WebSocket connects
   useEffect(() => {
     if (isConnected) {
+      console.log('🔔 Subscribing to dashboard room...')
       subscribe('dashboard')
+      console.log('✅ Subscribed to dashboard room')
     }
   }, [isConnected, subscribe])
 
   // Handle WebSocket messages for real-time updates
   useEffect(() => {
     if (!lastMessage) return
+
+    console.log('📬 WebSocket message received:', lastMessage)
 
     switch (lastMessage.type) {
       case 'dashboard_update':
@@ -117,15 +121,40 @@ export default function DashboardPage() {
 
       case 'fl_progress':
         // Update FL round progress
+        console.log('📨 Received fl_progress event:', lastMessage.data)
         if (lastMessage.data) {
           setCurrentRound((prev) => {
-            if (!prev) return prev
-            return {
+            console.log('🔄 Current round before update:', prev)
+            if (!prev) {
+              // Create new round from event data if none exists
+              console.log('✨ Creating new round from event data')
+              return {
+                id: lastMessage.data.round_id || lastMessage.data.id,
+                round_number: lastMessage.data.round_number || 1,
+                status: 'in-progress',
+                phase: lastMessage.data.phase || 'training',
+                progress: lastMessage.data.progress || 0,
+                epsilon: lastMessage.data.epsilon || 0.5,
+                model_accuracy: lastMessage.data.model_accuracy || 0,
+                clients: [],
+                start_time: new Date().toISOString(),
+              }
+            }
+            const updated = {
               ...prev,
               progress: lastMessage.data.progress ?? prev.progress,
               model_accuracy: lastMessage.data.model_accuracy ?? prev.model_accuracy,
+              phase: lastMessage.data.phase ?? prev.phase,
             }
+            console.log('✅ Updated round:', updated)
+            return updated
           })
+          
+          // Update facilities if included in the event
+          if (lastMessage.data.clients && Array.isArray(lastMessage.data.clients)) {
+            console.log('👥 Updating facilities:', lastMessage.data.clients.length)
+            setFlClients(lastMessage.data.clients)
+          }
         }
         break
 
@@ -162,6 +191,8 @@ export default function DashboardPage() {
     name: client.name,
     status: client.status,
   }))
+  
+  console.log('🏢 Formatted facilities for display:', formattedFacilities)
 
   // Render loading state
   if (loading) {
