@@ -8,7 +8,7 @@
 
 ## 🎯 Overview
 
-Successfully integrated WebSocket real-time updates into the CyberSentry Watchtower frontend using **Test-Driven Development (TDD)** approach.
+Successfully integrated WebSocket real-time updates into the OSB Watchtower frontend using **Test-Driven Development (TDD)** approach.
 
 ---
 

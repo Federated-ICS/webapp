@@ -25,7 +25,7 @@ export function Header() {
           <div className="flex items-center gap-3">
             <Shield size={40} className="text-blue-400" />
             <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 via-blue-500 to-green-400 bg-clip-text text-transparent">
-              CyberSentry Watchtower
+              OSB Watchtower
             </h1>
           </div>
 

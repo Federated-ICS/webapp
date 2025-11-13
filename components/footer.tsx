@@ -6,7 +6,7 @@ export function Footer() {
       <div className="container mx-auto px-4 py-8">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="text-gray-400 text-sm">
-            © 2025 CyberSentry Watchtower<span className="ml-3 text-xs">v1.0.0</span>
+            © 2025 OSB Watchtower<span className="ml-3 text-xs">v1.0.0</span>
           </div>
 
           <div className="flex items-center gap-6">

@@ -1,4 +1,4 @@
-# CyberSentry Watchtower 🛡️
+# OSB Watchtower 🛡️
 
 A modern cybersecurity monitoring and threat intelligence dashboard built with Next.js, featuring real-time alert management, federated learning status tracking, and interactive MITRE ATT&CK technique visualization.
 
