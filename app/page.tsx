@@ -24,8 +24,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Mock data for attack prediction (not yet implemented in backend)
-  const [attackPrediction] = useState({
+  // Attack prediction state (real-time via WebSocket)
+  const [attackPrediction, setAttackPrediction] = useState({
     techniqueId: "T1190",
     techniqueName: "Exploit Public-Facing Application",
     confidence: 76,
@@ -159,10 +159,21 @@ export default function DashboardPage() {
         break
 
       case 'attack_detected':
-        // Log attack detection (dashboard doesn't display attack details)
+        // Update attack prediction card with real-time data
         if (lastMessage.data) {
-          console.log('Attack detected:', lastMessage.data.technique_id)
-          // Could trigger a notification or update attack prediction card in the future
+          console.log('🎯 Attack detected:', lastMessage.data.technique_id)
+          
+          // Support both probability (0-1) and confidence (0-100) formats
+          const confidence = lastMessage.data.confidence 
+            ? (lastMessage.data.confidence > 1 ? lastMessage.data.confidence : lastMessage.data.confidence * 100)
+            : (lastMessage.data.probability ? lastMessage.data.probability * 100 : 0)
+          
+          setAttackPrediction({
+            techniqueId: lastMessage.data.technique_id || 'T0000',
+            techniqueName: lastMessage.data.name || lastMessage.data.technique_name || 'Unknown Attack',
+            confidence: Math.round(confidence),
+            timelineProgress: Math.round(confidence), // Use confidence as timeline progress
+          })
         }
         break
     }

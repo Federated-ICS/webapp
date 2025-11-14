@@ -33,12 +33,12 @@ export function AttackPredictionCard({
         </div>
 
         <div>
-          <p className="text-sm text-gray-400 mb-3">Expected Timeline</p>
+          <p className="text-sm text-gray-400 mb-3">Threat Level</p>
           <ProgressBar percentage={timelineProgress} showGradient />
           <div className="flex justify-between mt-2 text-xs text-gray-500">
-            <span>Now</span>
-            <span>24-48 hours</span>
-            <span>Critical Window</span>
+            <span>Low</span>
+            <span>Medium</span>
+            <span>Critical</span>
           </div>
         </div>
 
